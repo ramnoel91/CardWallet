@@ -194,6 +194,20 @@ html.dark .tag.on{color:var(--gold)}
 .rank{width:24px;font-weight:800;color:var(--muted);text-align:center}
 .medal{color:var(--gold)}
 
+.vtile{display:flex;gap:13px;align-items:center;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;box-shadow:var(--shadow)}
+.dateblk{width:52px;flex:none;border-radius:13px;text-align:center;padding:6px 0;background:var(--gold-soft);color:#8a5f0c}
+html.dark .dateblk{color:var(--gold)}
+.dateblk.up{background:var(--brand);color:#fff}
+html.dark .dateblk.up{color:#062019}
+.dateblk .m{font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase}
+.dateblk .d{font-size:21px;font-weight:800;line-height:1.05}
+.vtile .meta{flex:1;min-width:0}
+.vtile .t{font-weight:680;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vtile .s{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.hrs{font-weight:800;font-size:15px;color:var(--brand);flex:none;text-align:right}
+.hrs small{display:block;font-size:11px;color:var(--muted);font-weight:600}
+.volhero{background:linear-gradient(140deg,var(--gold-soft),var(--card));border:1px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:var(--shadow)}
+.volhero b.big{font-size:40px;font-weight:800;letter-spacing:-1px;color:var(--ink)}
 .toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(16px);background:var(--ink);color:var(--bg);padding:11px 16px;border-radius:13px;font-size:14px;font-weight:550;opacity:0;transition:.25s;z-index:60;max-width:90vw;text-align:center;pointer-events:none}
 .toast.show{opacity:1;transform:translateX(-50%)}
 .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--brand);border-radius:50%;animation:sp .8s linear infinite;margin:24px auto 12px}
@@ -223,7 +237,7 @@ html.dark .tag.on{color:var(--gold)}
       </button>
     </div>
   </div>
-  <div class="stats" id="stats"></div>
+  <div class="stats" id="stats" data-nav="insights"></div>
 </div>
 
 <div class="wrap">
@@ -235,7 +249,7 @@ html.dark .tag.on{color:var(--gold)}
   <button class="nb" data-nav="follow"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg>Follow-ups<span class="badge hide" id="dueBadge"></span></button>
   <button class="fab" id="fab" aria-label="Add card"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
   <button class="nb" data-nav="refs"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>Referrals</button>
-  <button class="nb" data-nav="insights"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V11M12 20V5M19 20v-6"/></svg>Insights</button>
+  <button class="nb" data-nav="vol"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/></svg>Volunteer</button>
 </div></nav>
 
 <input type="file" id="scanFile" accept="image/*" capture="environment" class="hide">
@@ -289,10 +303,15 @@ function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("sh
 /* ====================== storage (IndexedDB, falls back to localStorage) ====================== */
 const Store = (() => {
   let idb = null;
+  const lsList = st => st==="vols" ? vols : cards;
+  const lsSave = st => { try{ localStorage.setItem("cw."+st, JSON.stringify(lsList(st))); }catch(e){} };
   const open = () => new Promise(res => {
     try {
-      const r = indexedDB.open("cardwallet", 1);
-      r.onupgradeneeded = () => { r.result.createObjectStore("cards", {keyPath:"id"}); r.result.createObjectStore("kv"); };
+      const r = indexedDB.open("cardwallet", 2);
+      r.onupgradeneeded = () => { const d=r.result;
+        if(!d.objectStoreNames.contains("cards")) d.createObjectStore("cards",{keyPath:"id"});
+        if(!d.objectStoreNames.contains("kv")) d.createObjectStore("kv");
+        if(!d.objectStoreNames.contains("vols")) d.createObjectStore("vols",{keyPath:"id"}); };
       r.onsuccess = () => { idb = r.result; res(true); };
       r.onerror = () => res(false);
     } catch(e){ res(false); }
@@ -300,11 +319,11 @@ const Store = (() => {
   const tx = (store, mode, fn) => new Promise((res, rej) => { const t = idb.transaction(store, mode); const out = fn(t.objectStore(store)); t.oncomplete = () => res(out && out.result); t.onerror = () => rej(t.error); });
   return {
     async init(){ return open(); },
-    async all(){ if(!idb){ try{return JSON.parse(localStorage.getItem("cw.cards")||"[]");}catch(e){return [];} }
-      return new Promise((res)=>{ const r=idb.transaction("cards").objectStore("cards").getAll(); r.onsuccess=()=>res(r.result||[]); r.onerror=()=>res([]); }); },
-    async put(c){ if(!idb){ try{localStorage.setItem("cw.cards",JSON.stringify(cards));}catch(e){} return; } return tx("cards","readwrite",s=>s.put(c)); },
-    async del(id){ if(!idb){ try{localStorage.setItem("cw.cards",JSON.stringify(cards));}catch(e){} return; } return tx("cards","readwrite",s=>s.delete(id)); },
-    async clearAndPut(list){ if(!idb){ try{localStorage.setItem("cw.cards",JSON.stringify(list));}catch(e){} return; } return tx("cards","readwrite",s=>{ s.clear(); list.forEach(c=>s.put(c)); }); },
+    async all(st="cards"){ if(!idb){ try{return JSON.parse(localStorage.getItem("cw."+st)||"[]");}catch(e){return [];} }
+      return new Promise((res)=>{ const r=idb.transaction(st).objectStore(st).getAll(); r.onsuccess=()=>res(r.result||[]); r.onerror=()=>res([]); }); },
+    async put(c,st="cards"){ if(!idb) return lsSave(st); return tx(st,"readwrite",s=>s.put(c)); },
+    async del(id,st="cards"){ if(!idb) return lsSave(st); return tx(st,"readwrite",s=>s.delete(id)); },
+    async clearAndPut(list,st="cards"){ if(!idb) return lsSave(st); return tx(st,"readwrite",s=>{ s.clear(); list.forEach(c=>s.put(c)); }); },
     get(k,d){ try{ const v=localStorage.getItem("cw."+k); return v==null?d:JSON.parse(v);}catch(e){return d;} },
     set(k,v){ try{ localStorage.setItem("cw."+k, JSON.stringify(v)); }catch(e){} }
   };
@@ -312,6 +331,7 @@ const Store = (() => {
 
 /* ====================== state ====================== */
 let cards = [];
+let vols = [];
 let state = { nav:"home", q:"", cat:"All", status:"all", tag:"", sort:Store.get("sort","az") };
 let draft = null;
 let sheetStack = []; // for back button
@@ -470,6 +490,7 @@ function renderInsights(){
       <div class="kpi"><b>${touches30}</b><small>Touchpoints · 30 days</small></div>
       <div class="kpi"><b style="color:var(--brand)">${won}</b><small>Won</small></div>
       <div class="kpi"><b>${rate}%</b><small>Win rate</small></div>
+      <div class="kpi" data-nav="vol" style="grid-column:1/-1;cursor:pointer"><b style="color:#b07d18">${fmtHrs(vols.filter(v=>volYear(v)===String(new Date().getFullYear())&&daysUntil(v.date)<=0).reduce((n,v)=>n+hoursOf(v),0))}</b><small>Volunteer hours this year · ${vols.filter(v=>daysUntil(v.date)>0).length} upcoming ›</small></div>
     </div>
     <div class="sec"><h3>Pipeline</h3></div>
     <div class="box" style="margin-top:0"><div class="funnel">${STATUSES.map(s=>{const n=cards.filter(c=>(c.status||"new")===s.k).length;return `<div class="bar"><span class="lbl">${s.l}</span><div class="trk"><div class="fill" style="width:${n/maxS*100}%;background:${s.c}"></div></div><span class="n">${n}</span></div>`}).join("")}</div></div>
@@ -479,13 +500,87 @@ function renderInsights(){
     <div class="box" style="margin-top:0">${catCounts.map(([k,n])=>`<div class="bar"><span class="lbl">${esc(k)}</span><div class="trk"><div class="fill" style="width:${n/maxC*100}%;background:${catColor(k)}"></div></div><span class="n">${n}</span></div>`).join("")||`<div class="small muted">Add categories to your contacts to see this.</div>`}</div>`;
 }
 
+/* ---------- volunteer ---------- */
+const volYear = v => (v.date||"").slice(0,4);
+const fmtTime = t => { if(!t) return ""; const [h,m]=t.split(":").map(Number); const d=new Date(); d.setHours(h,m||0); return d.toLocaleTimeString(undefined,{hour:"numeric",minute:m?"2-digit":undefined}); };
+const hoursOf = v => Number(v.hours)||0;
+const fmtHrs = n => (Math.round(n*10)/10).toString();
+const volCard = v => cards.find(c=>c.id===v.contactId);
+function volTile(v){
+  const d=parseD(v.date); const up = daysUntil(v.date)>=0;
+  const when = [v.start?fmtTime(v.start)+(v.end?"–"+fmtTime(v.end):""):"", v.org].filter(Boolean).join(" · ");
+  return `<button class="vtile" data-vol="${v.id}">
+    <div class="dateblk ${up?"up":""}"><div class="m">${d.toLocaleDateString(undefined,{month:"short"})}</div><div class="d">${d.getDate()}</div></div>
+    <div class="meta"><div class="t">${esc(v.title||v.org||"Volunteering")}</div><div class="s">${esc(when||v.role||"")}</div>
+      ${up?`<div class="pills"><span class="pill ok">${relDue(v.date)}</span>${v.role?`<span class="pill gold">${esc(v.role)}</span>`:""}</div>`:(v.role?`<div class="pills"><span class="pill gold">${esc(v.role)}</span></div>`:"")}</div>
+    ${hoursOf(v)?`<div class="hrs">${fmtHrs(hoursOf(v))}<small>hrs</small></div>`:""}
+  </button>`;
+}
+function renderVol(){
+  const yr = String(new Date().getFullYear());
+  const thisYear = vols.filter(v=>volYear(v)===yr && daysUntil(v.date)<=0);
+  const hrsYear = thisYear.reduce((n,v)=>n+hoursOf(v),0);
+  const hrsAll = vols.filter(v=>daysUntil(v.date)<=0).reduce((n,v)=>n+hoursOf(v),0);
+  const orgs = new Set(vols.map(v=>(v.org||"").trim().toLowerCase()).filter(Boolean));
+  const upcoming = vols.filter(v=>daysUntil(v.date)>0 || (daysUntil(v.date)===0)).sort((a,b)=>(a.date+(a.start||"")).localeCompare(b.date+(b.start||"")));
+  const past = vols.filter(v=>daysUntil(v.date)<0).sort((a,b)=>(b.date+(b.start||"")).localeCompare(a.date+(a.start||"")));
+  const byMonth = {}; past.forEach(v=>{ const k=v.date.slice(0,7); (byMonth[k]=byMonth[k]||[]).push(v); });
+  const orgHrs = {}; vols.filter(v=>daysUntil(v.date)<=0).forEach(v=>{ const k=v.org||"Other"; orgHrs[k]=(orgHrs[k]||0)+hoursOf(v); });
+  const topOrgs = Object.entries(orgHrs).sort((a,b)=>b[1]-a[1]).slice(0,5); const maxO=Math.max(1,...topOrgs.map(x=>x[1]));
+  let h = `<div style="height:16px"></div>
+    <div class="volhero"><div class="row" style="align-items:flex-end"><div style="flex:1"><div class="small muted" style="font-weight:700">VOLUNTEER HOURS · ${yr}</div><b class="big">${fmtHrs(hrsYear)}</b></div>
+      <div style="text-align:right" class="small muted"><div><b style="color:var(--ink)">${thisYear.length}</b> events this year</div><div><b style="color:var(--ink)">${orgs.size}</b> organizations</div><div><b style="color:var(--ink)">${fmtHrs(hrsAll)}</b> hrs all-time</div></div></div>
+      <button class="btn block" style="margin-top:14px" data-act="volnew">＋ Add volunteer event</button></div>`;
+  if (!vols.length) return h + `<div class="empty"><h3>No volunteer events yet</h3><p>Log the events you help with — the date, the organization, and your hours — and plan the ones coming up.</p></div>`;
+  if (upcoming.length) h += `<div class="sec"><h3>Upcoming · ${upcoming.length}</h3></div><div class="list">${upcoming.map(volTile).join("")}</div>`;
+  Object.keys(byMonth).forEach(k=>{ const [y,m]=k.split("-").map(Number); const lbl=new Date(y,m-1,1).toLocaleDateString(undefined,{month:"long",year:"numeric"}); const hrs=byMonth[k].reduce((n,v)=>n+hoursOf(v),0);
+    h += `<div class="sec"><h3>${lbl}</h3><span class="small muted" style="font-weight:700">${fmtHrs(hrs)} hrs</span></div><div class="list">${byMonth[k].map(volTile).join("")}</div>`; });
+  if (topOrgs.length>1) h += `<div class="sec"><h3>Hours by organization</h3></div><div class="box" style="margin-top:0">${topOrgs.map(([k,n])=>`<div class="bar"><span class="lbl">${esc(k)}</span><div class="trk"><div class="fill" style="width:${n/maxO*100}%;background:var(--gold)"></div></div><span class="n" style="width:36px">${fmtHrs(n)}</span></div>`).join("")}</div>`;
+  return h;
+}
+function calcHours(a,b){ if(!a||!b) return ""; const [h1,m1]=a.split(":").map(Number),[h2,m2]=b.split(":").map(Number); let d=(h2*60+m2)-(h1*60+m1); if(d<=0) d+=1440; return fmtHrs(d/60); }
+function openVolForm(v, prefill){
+  const isNew = !v;
+  draft = v ? JSON.parse(JSON.stringify(v)) : { id:"v"+newId(), date:today(), start:"", end:"", hours:"", created:Date.now(), ...(prefill||{}) };
+  const up = daysUntil(draft.date)>=0;
+  const orgOpts = [...new Set(cards.map(c=>c.business).filter(Boolean).concat(vols.map(x=>x.org).filter(Boolean)))].sort();
+  const f = (k,l,ph="",type="text",extra="") => `<label class="f">${l}</label><input class="in" data-vk="${k}" type="${type}" placeholder="${esc(ph)}" value="${esc(draft[k]??"")}" ${extra}>`;
+  openSheet(`<h2>${isNew?"Volunteer event":"Edit volunteer event"}</h2>
+    ${f("title","Event","Food drive, 5K water station…")}
+    ${f("org","Organization","Woodstock Food Pantry","text",'list="orglist"')}
+    <datalist id="orglist">${orgOpts.map(o=>`<option value="${esc(o)}">`).join("")}</datalist>
+    ${f("date","Date","","date")}
+    <div class="two"><div>${f("start","Start","","time")}</div><div>${f("end","End","","time")}</div></div>
+    <div class="two"><div>${f("hours","Hours","3","number",'step="0.25" min="0" inputmode="decimal"')}</div><div>${f("role","Your role","Greeter, setup…")}</div></div>
+    ${f("location","Location","Address or place")}
+    <label class="f">Notes</label><textarea class="in" data-vk="notes" placeholder="Who you met, what you did, who to thank…">${esc(draft.notes||"")}</textarea>
+    <div class="row" style="margin-top:20px;gap:8px"><button class="btn ghost" style="flex:1" data-act="${draft.contactId&&isNew?"back":"cancel"}" data-id="${esc(draft.contactId||"")}">Cancel</button><button class="btn" style="flex:2" data-act="volsave">Save</button></div>
+    ${!isNew?`<div class="row" style="margin-top:8px;gap:8px">${up&&BRIDGE?`<button class="btn ghost sm" style="flex:1" data-act="volcal">📅 Add to calendar</button>`:""}${volCard(draft)?`<button class="btn ghost sm" style="flex:1" data-open="${draft.contactId}">Open contact</button>`:""}<button class="btn danger sm" data-act="voldel">Delete</button></div>`:""}`, "vol");
+  $("#sheet").querySelectorAll("[data-vk]").forEach(el=>el.addEventListener("input",()=>{
+    draft[el.dataset.vk]=el.value;
+    if ((el.dataset.vk==="start"||el.dataset.vk==="end") && draft.start && draft.end){ draft.hours=calcHours(draft.start,draft.end); $('[data-vk=hours]').value=draft.hours; }
+  }));
+}
+async function saveVol(v){
+  v.updated=Date.now(); v.hours = v.hours===""?"":Number(v.hours);
+  if (!v.contactId && v.org){ const m=cards.find(c=>(c.business||"").trim().toLowerCase()===v.org.trim().toLowerCase()); if(m) v.contactId=m.id; }
+  const i=vols.findIndex(x=>x.id===v.id); if(i>=0) vols[i]=v; else vols.push(v);
+  try { await Store.put(v,"vols"); } catch(e){ toast("Couldn't save"); }
+  render();
+}
+async function removeVol(id){ vols=vols.filter(v=>v.id!==id); try{ await Store.del(id,"vols"); }catch(e){} render(); }
+function volCSV(){
+  const head=["Date","Event","Organization","Start","End","Hours","Role","Location","Notes"];
+  return [head.join(","),...vols.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(v=>[v.date,v.title,v.org,v.start,v.end,v.hours,v.role,v.location,v.notes].map(csvCell).join(","))].join("\n");
+}
+
 function render(){
   renderStats();
   document.querySelectorAll(".nb").forEach(b=>b.classList.toggle("on", b.dataset.nav===state.nav));
   const v = $("#view");
   const focused = document.activeElement && document.activeElement.id==="q";
   const pos = focused ? document.activeElement.selectionStart : 0;
-  v.innerHTML = state.nav==="home" ? renderHome() : state.nav==="follow" ? renderFollow() : state.nav==="refs" ? renderRefs() : renderInsights();
+  v.innerHTML = state.nav==="home" ? renderHome() : state.nav==="follow" ? renderFollow() : state.nav==="refs" ? renderRefs() : state.nav==="vol" ? renderVol() : renderInsights();
   if (focused && $("#q")) { $("#q").focus(); try{$("#q").setSelectionRange(pos,pos);}catch(e){} }
 }
 
@@ -553,6 +648,13 @@ function openDetail(id){
     <div class="box" style="margin-top:6px">
       ${(c.referrals||[]).length ? c.referrals.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(r=>`<div class="tli"><div class="ic" style="background:${r.dir==="got"?"var(--brand-soft)":"var(--blue-soft)"}">${r.dir==="got"?"⬇️":"⬆️"}</div><div><div style="font-weight:600">${r.dir==="got"?"Received":"Sent"}${r.note?` — <span style="font-weight:450">${esc(r.note)}</span>`:""}</div><div class="small muted">${fmtDate(r.date)}</div></div><button class="x" data-act="refdel" data-id="${c.id}" data-r="${r.id}">✕</button></div>`).join("") : `<div class="small muted">Track business they send you, and business you send them.</div>`}
       <button class="btn soft sm block" style="margin-top:10px" data-act="refnew" data-id="${c.id}">＋ Log referral</button>
+    </div>
+
+    <div class="h4">Volunteer</div>
+    <div class="box" style="margin-top:6px">
+      ${(()=>{ const vs=vols.filter(v=>v.contactId===c.id).sort((a,b)=>b.date.localeCompare(a.date)); const hrs=vs.filter(v=>daysUntil(v.date)<=0).reduce((n,v)=>n+hoursOf(v),0);
+        return vs.length ? `<div class="small muted" style="margin-bottom:4px">${vs.length} event${vs.length>1?"s":""} · ${fmtHrs(hrs)} hrs</div>`+vs.slice(0,6).map(v=>`<button class="tli" style="width:100%;text-align:left" data-vol="${v.id}"><div class="ic" style="background:var(--gold-soft)">${daysUntil(v.date)>=0?"📅":"🤝"}</div><div><div style="font-weight:600">${esc(v.title||"Volunteering")}${hoursOf(v)?` · <span style="font-weight:450">${fmtHrs(hoursOf(v))} hrs</span>`:""}</div><div class="small muted">${fmtDate(v.date)}${v.start?" · "+fmtTime(v.start):""}</div></div></button>`).join("") : `<div class="small muted">Volunteering with this organization? Log the dates and hours here.</div>`; })()}
+      <button class="btn soft sm block" style="margin-top:10px" data-act="volfor" data-id="${c.id}">＋ Volunteer event</button>
     </div>
 
     ${(c.tags||[]).length?`<div class="h4">Tags</div><div class="tagrow">${c.tags.map(t=>`<span class="tag on">${esc(t)}</span>`).join("")}</div>`:""}
@@ -639,13 +741,15 @@ function openSort(){
 
 function openMenu(){
   const item = (act,icon,l,sub) => `<button class="menuitem" data-act="${act}"><span class="mi">${icon}</span><span>${l}<small>${sub}</small></span></button>`;
-  openSheet(`<h2>Card Wallet</h2><div class="muted small">${cards.length} contacts · saved on this phone</div>
+  openSheet(`<h2>Card Wallet</h2><div class="muted small">${cards.length} contacts · ${vols.length} volunteer events · saved on this phone</div>
     <div style="margin-top:10px">
       ${item("backup","💾","Back up everything","Save a backup file you can restore later")}
       ${item("restore","♻️","Restore from backup","Load a Card Wallet backup file")}
-      ${item("csv","📊","Export spreadsheet","CSV for Excel or Google Sheets")}
+      ${item("insights","📈","Insights","Pipeline, activity and win rate")}
+      ${item("csv","📊","Export contacts","CSV for Excel or Google Sheets")}
+      ${item("volcsv","🤝","Export volunteer hours","CSV with dates, organizations and hours")}
       ${item("theme","🌓","Theme: "+({auto:"Match phone",light:"Light",dark:"Dark"}[Store.get("theme","auto")]),"Tap to switch")}
-      ${!cards.length?item("demo","✨","Load sample contacts","See how the app looks with a few cards"):""}
+      ${!cards.length?item("demo","✨","Load sample data","See how the app looks with a few cards"):""}
     </div>
     <p class="small muted" style="margin-top:14px;line-height:1.45">Your contacts stay on this phone. Back up now and then so you never lose them — the backup also moves them to a new phone.</p>
     <button class="btn block" style="margin-top:8px" data-act="cancel">Done</button>`, "menu");
@@ -795,11 +899,12 @@ function demo(){
 
 /* ====================== events ====================== */
 document.addEventListener("click", async e=>{
-  const t = e.target.closest("[data-nav],[data-open],[data-act],[data-cat],[data-status],[data-tag],[data-filter],[data-tagt],[data-log]"); if(!t) return;
+  const t = e.target.closest("[data-vol],[data-nav],[data-open],[data-act],[data-cat],[data-status],[data-tag],[data-filter],[data-tagt],[data-log]"); if(!t) return;
   if (t.dataset.log){ // call/text/email: record it, let the link open
     const c=cards.find(x=>x.id===t.dataset.id); if(c){ c.log=(c.log||[]).concat([{id:newId(),type:t.dataset.log,note:"",date:today()}]); if((c.status||"new")==="new") c.status="contacted"; save(c); setTimeout(()=>openDetail(c.id),400); }
     return;
   }
+  if (t.dataset.vol){ const v=vols.find(x=>x.id===t.dataset.vol); if(v) openVolForm(v); return; }
   if (t.dataset.nav){ state.nav=t.dataset.nav; closeSheet(); render(); window.scrollTo(0,0); return; }
   if (t.dataset.open){ openDetail(t.dataset.open); return; }
   if (t.dataset.filter){ state.cat="All"; state.status="all"; state.tag=""; render(); return; }
@@ -810,6 +915,20 @@ document.addEventListener("click", async e=>{
   const a=t.dataset.act, id=t.dataset.id, c=cards.find(x=>x.id===id);
   switch(a){
     case "add": openForm(null); break;
+    case "insights": state.nav="insights"; closeSheet(); render(); window.scrollTo(0,0); break;
+    case "volnew": openVolForm(null); break;
+    case "volfor": openVolForm(null,{org:c.business||c.name,contactId:c.id}); break;
+    case "volsave": {
+      if (!(draft.title||"").trim() && !(draft.org||"").trim()){ toast("Add an event or organization"); return; }
+      if (!draft.date){ toast("Pick a date"); return; }
+      Object.keys(draft).forEach(k=>{ if(typeof draft[k]==="string") draft[k]=draft[k].trim(); });
+      const v=draft, back=v.contactId && !vols.some(x=>x.id===v.id) && state.nav!=="vol"; await saveVol(v); toast("Saved");
+      if (back && cards.some(x=>x.id===v.contactId)) openDetail(v.contactId); else closeSheet(); break;
+    }
+    case "voldel": { const v=draft; confirmSheet(`Delete this event?`, `${v.title||v.org||"Volunteer event"} on ${fmtDate(v.date)}`, "Delete", ()=>{ removeVol(v.id); toast("Deleted"); }); break; }
+    case "volcal": { const v=draft; const desc=[v.org,v.role&&("Role: "+v.role),v.location,v.notes].filter(Boolean).join("\n");
+      try { if (BRIDGE.addCalendarAt) BRIDGE.addCalendarAt("Volunteer: "+(v.title||v.org), desc, v.date, v.start||"", v.end||"", v.location||""); else BRIDGE.addCalendar("Volunteer: "+(v.title||v.org), desc, v.date); } catch(err){ toast("Couldn't open calendar"); } break; }
+    case "volcsv": if(!vols.length) return toast("No volunteer events yet"); saveFile(`volunteer-hours-${today()}.csv`, volCSV()); break;
     case "scan": $("#scanFile").click(); break;
     case "cancel": closeSheet(); break;
     case "back": id && cards.some(x=>x.id===id) ? openDetail(id) : closeSheet(); break;
@@ -845,11 +964,17 @@ document.addEventListener("click", async e=>{
     case "copy": copyText(contactText(c),"Contact info copied"); break;
     case "share": try{ BRIDGE.share(title(c), contactText(c)); }catch(err){ copyText(contactText(c)); } break;
     case "tocontacts": try{ BRIDGE.addContact(JSON.stringify({name:c.name||c.business, company:c.business||"", title:c.title||"", phone:c.phone||"", email:c.email||"", address:c.address||"", notes:[c.website,c.notes].filter(Boolean).join("\n")})); }catch(err){ toast("Couldn't open contacts"); } break;
-    case "backup": saveFile(`card-wallet-backup-${today()}.json`, JSON.stringify({app:"Card Wallet",version:2,exported:new Date().toISOString(),cards})); break;
+    case "backup": saveFile(`card-wallet-backup-${today()}.json`, JSON.stringify({app:"Card Wallet",version:3,exported:new Date().toISOString(),cards,vols})); break;
     case "restore": $("#restoreFile").click(); break;
     case "csv": if(!cards.length) return toast("No contacts yet"); saveFile(`card-wallet-${today()}.csv`, toCSV()); break;
     case "theme": { const order=["auto","light","dark"]; const cur=Store.get("theme","auto"); Store.set("theme",order[(order.indexOf(cur)+1)%3]); applyTheme(); openMenu(); break; }
-    case "demo": { const d=demo(); for(const x of d){ cards.push(x); await Store.put(x); } closeSheet(); render(); toast("Sample contacts added"); break; }
+    case "demo": { const d=demo(); for(const x of d){ cards.push(x); await Store.put(x); }
+      const bake=d[0]; const dv=[
+        {title:"Holiday food drive",org:"Woodstock Food Pantry",date:addDays(9),start:"09:00",end:"12:00",hours:3,role:"Sorting & packing",location:"Woodstock Food Pantry"},
+        {title:"Fall Fest booth",org:"Woodstock Chamber of Commerce",date:addDays(-18),start:"10:00",end:"14:30",hours:4.5,role:"GLCU booth"},
+        {title:"Bake sale for the shelter",org:"Prairie Oak Bakery",contactId:bake.id,date:addDays(-33),start:"08:00",end:"11:00",hours:3,role:"Cashier"},
+        {title:"Reading buddies",org:"Woodstock Public Library",date:addDays(-47),start:"15:30",end:"17:00",hours:1.5}];
+      for (const x of dv){ const v={id:"v"+newId(),created:Date.now(),...x}; vols.push(v); await Store.put(v,"vols"); } closeSheet(); render(); toast("Sample data added"); break; }
   }
 });
 document.addEventListener("change", async e=>{
@@ -869,11 +994,12 @@ function openTagPrompt(){
 $("#restoreFile").addEventListener("change", async e=>{
   const file=e.target.files[0]; e.target.value=""; if(!file) return;
   try {
-    const data = JSON.parse(await file.text()); const list = Array.isArray(data) ? data : data.cards;
+    const data = JSON.parse(await file.text()); const list = Array.isArray(data) ? data : data.cards; const vlist = Array.isArray(data.vols) ? data.vols : [];
     if (!Array.isArray(list)) throw 0;
-    confirmSheet(`Restore ${list.length} contacts?`, "Contacts in the backup are added. Ones you already have are updated to the backup's version.", "Restore", async ()=>{
+    confirmSheet(`Restore ${list.length} contacts${vlist.length?` and ${vlist.length} volunteer events`:""}?`, "Contacts in the backup are added. Ones you already have are updated to the backup's version.", "Restore", async ()=>{
       const byId = new Map(cards.map(c=>[c.id,c])); list.forEach(c=>{ if(c && c.id) byId.set(c.id,c); });
-      cards = [...byId.values()]; await Store.clearAndPut(cards); render(); toast("Restored ✓");
+      cards = [...byId.values()]; await Store.clearAndPut(cards);
+      const vById = new Map(vols.map(v=>[v.id,v])); vlist.forEach(v=>{ if(v && v.id) vById.set(v.id,v); }); vols=[...vById.values()]; await Store.clearAndPut(vols,"vols"); render(); toast("Restored ✓");
     });
   } catch(err){ toast("That isn't a Card Wallet backup"); }
 });
@@ -882,6 +1008,7 @@ $("#fab").onclick = () => openSheet(`<h2>Add a contact</h2><p class="muted small
   <div style="display:grid;gap:10px;margin-top:14px">
     <button class="btn block" data-act="scan" style="padding:16px">${ICON.camera} Scan a business card</button>
     <button class="btn ghost block" data-act="add" style="padding:16px">${ICON.pen} Type it in</button>
+    <button class="btn ghost block" data-act="volnew" style="padding:16px">🤝 Log volunteer time</button>
   </div>`, "fabmenu");
 $("#menuBtn").onclick = openMenu;
 
@@ -897,6 +1024,7 @@ window.__cwBack = () => {
   applyTheme();
   await Store.init();
   cards = await Store.all();
+  vols = await Store.all("vols");
   render();
 })();
 window.__cw = { parseCard, guessCategory }; // for testing

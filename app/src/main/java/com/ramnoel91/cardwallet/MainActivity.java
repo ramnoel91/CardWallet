@@ -241,6 +241,43 @@ public class MainActivity extends Activity {
             });
         }
 
+        /** Calendar event with optional start/end times ("HH:mm"); all-day when no start time */
+        @JavascriptInterface
+        public void addCalendarAt(final String title, final String desc, final String ymd,
+                                  final String start, final String end, final String location) {
+            runOnUiThread(() -> {
+                try {
+                    String[] p = ymd.split("-");
+                    int y = Integer.parseInt(p[0]), m = Integer.parseInt(p[1]) - 1, d = Integer.parseInt(p[2]);
+                    Intent i = new Intent(Intent.ACTION_INSERT)
+                            .setData(CalendarContract.Events.CONTENT_URI)
+                            .putExtra(CalendarContract.Events.TITLE, title)
+                            .putExtra(CalendarContract.Events.DESCRIPTION, desc)
+                            .putExtra(CalendarContract.Events.EVENT_LOCATION, location);
+                    Calendar b = Calendar.getInstance();
+                    if (start != null && start.contains(":")) {
+                        String[] s = start.split(":");
+                        b.set(y, m, d, Integer.parseInt(s[0]), Integer.parseInt(s[1]), 0);
+                        long endMs = b.getTimeInMillis() + 60 * 60 * 1000;
+                        if (end != null && end.contains(":")) {
+                            String[] e = end.split(":");
+                            Calendar c = Calendar.getInstance();
+                            c.set(y, m, d, Integer.parseInt(e[0]), Integer.parseInt(e[1]), 0);
+                            if (c.getTimeInMillis() <= b.getTimeInMillis()) c.add(Calendar.DATE, 1);
+                            endMs = c.getTimeInMillis();
+                        }
+                        i.putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, b.getTimeInMillis());
+                        i.putExtra(CalendarContract.EXTRA_EVENT_END_TIME, endMs);
+                    } else {
+                        b.set(y, m, d, 0, 0, 0);
+                        i.putExtra(CalendarContract.EXTRA_EVENT_ALL_DAY, true);
+                        i.putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, b.getTimeInMillis());
+                    }
+                    startActivity(i);
+                } catch (Exception ignored) { }
+            });
+        }
+
         /** Reads the text on a card photo, on the phone, with no internet needed */
         @JavascriptInterface
         public void recognize(final String base64) {
