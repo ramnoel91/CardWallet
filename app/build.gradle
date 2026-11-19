@@ -32,4 +32,6 @@ dependencies {
     implementation 'androidx.core:core:1.13.1'
     // On-device text recognition for scanning business cards (works offline)
     implementation 'com.google.mlkit:text-recognition:16.0.1'
+    // Keeps the Kotlin libraries ML Kit pulls in on one version
+    implementation platform('org.jetbrains.kotlin:kotlin-bom:1.8.22')
 }
