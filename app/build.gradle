@@ -1,0 +1,35 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.ramnoel91.cardwallet'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'com.ramnoel91.cardwallet'
+        minSdk 24
+        targetSdk 34
+        versionCode((System.getenv('GITHUB_RUN_NUMBER') ?: '1').toInteger())
+        versionName "2.${System.getenv('GITHUB_RUN_NUMBER') ?: '0'}"
+    }
+    signingConfigs {
+        release {
+            storeFile rootProject.file('cardwallet.keystore')
+            storePassword 'cardwallet'
+            keyAlias 'cardwallet'
+            keyPassword 'cardwallet'
+        }
+    }
+    buildTypes {
+        release { minifyEnabled false; signingConfig signingConfigs.release }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.11.0'
+    implementation 'androidx.core:core:1.13.1'
+    // On-device text recognition for scanning business cards (works offline)
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
+}
